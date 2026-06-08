@@ -1,0 +1,74 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Install dependencies & run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        run: pytest
+
+  docker-build:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t ai-customer-agent:${{ github.sha }} .
+
+  deploy:
+    name: Deploy to Cloud Run (manual trigger only)
+    runs-on: ubuntu-latest
+    needs: docker-build
+    # This job intentionally does NOT run automatically on push. Deploying to
+    # Cloud Run requires a configured GCP project, billing account, and the
+    # GCP_PROJECT_ID / GCP_SA_KEY repository secrets described in
+    # docs/deployment.md. Until those secrets exist this job is a documented
+    # placeholder — trigger it manually (workflow_dispatch) once they're set up.
+    if: github.event_name == 'workflow_dispatch'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Build and submit image via Cloud Build
+        run: gcloud builds submit --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/ai-customer-agent
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ai-customer-agent \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/ai-customer-agent \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated

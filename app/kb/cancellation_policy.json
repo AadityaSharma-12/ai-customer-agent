@@ -1,0 +1,50 @@
+{
+  "subscription_plans": [
+    {
+      "plan": "Free",
+      "monthly_fee": 0,
+      "description": "No-cost tier with limited features."
+    },
+    {
+      "plan": "Premium",
+      "monthly_fee": 1000,
+      "description": "Full feature access for individual users."
+    },
+    {
+      "plan": "Enterprise",
+      "monthly_fee": 5000,
+      "description": "Full feature access plus dedicated account management for organizations."
+    }
+  ],
+  "refund_policy": {
+    "prorated": true,
+    "billing_cycle_days": 30,
+    "formula": "monthly_fee * unused_days / total_days",
+    "notes": "Refunds are calculated on the unused portion of the current billing cycle, rounded to 2 decimal places, and never exceed the monthly fee or fall below zero."
+  },
+  "retention_offers": [
+    {
+      "offer": "20% discount",
+      "eligibility": "Premium",
+      "description": "20% off the next 3 months for Premium subscribers."
+    },
+    {
+      "offer": "Account review",
+      "eligibility": "Enterprise",
+      "description": "A dedicated account manager will review usage and pricing with the customer."
+    },
+    {
+      "offer": "Free month",
+      "eligibility": "New users (<30 days)",
+      "description": "One additional month of service at no charge for customers within their first 30 days."
+    }
+  ],
+  "cancellation_rules": {
+    "retention_required": true,
+    "notes": "Retention offers must always be presented before a cancellation can proceed. Cancellation only proceeds once the customer explicitly declines the offer."
+  },
+  "grace_period": {
+    "days": 7,
+    "notes": "Customers may reactivate a cancelled account within 7 days without losing historical data."
+  }
+}
