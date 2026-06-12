@@ -21,6 +21,14 @@ class RetentionOffer(BaseModel):
     eligibility_reason: str
 
 
+class CustomerSummary(BaseModel):
+    name: str
+    email: str
+    plan: str
+    status: str
+    subscription_start: str
+
+
 class CancelAccountResponse(BaseModel):
     status: str
     message: str
@@ -28,3 +36,4 @@ class CancelAccountResponse(BaseModel):
     refund: float | None = None
     audit_log_id: int | None = None
     customer_id: str
+    customer: CustomerSummary | None = None

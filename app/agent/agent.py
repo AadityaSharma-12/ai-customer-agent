@@ -32,6 +32,17 @@ You must:
 """
 
 
+def _customer_summary(customer: dict) -> dict:
+    """Project the fields of `CustomerSummary` out of a full customer record."""
+    return {
+        "name": customer["name"],
+        "email": customer["email"],
+        "plan": customer["plan"],
+        "status": customer["status"],
+        "subscription_start": customer["subscription_start"],
+    }
+
+
 class CancellationAgent:
     """Orchestrates the account cancellation & retention workflow."""
 
@@ -58,7 +69,7 @@ class CancellationAgent:
 
         Returns:
             A structured response dict: status, message, offer, refund,
-            audit_log_id, customer_id.
+            audit_log_id, customer_id, customer.
         """
         # Step 1: Authenticate customer
         try:
@@ -71,6 +82,7 @@ class CancellationAgent:
                 "refund": None,
                 "audit_log_id": None,
                 "customer_id": customer_id,
+                "customer": None,
             }
 
         # Step 2: Fetch customer profile (Zoho MCP read)
@@ -84,6 +96,7 @@ class CancellationAgent:
                 "refund": None,
                 "audit_log_id": None,
                 "customer_id": customer_id,
+                "customer": None,
             }
 
         # Step 3: Load cancellation policy (knowledge base — the only source of policy data)
@@ -110,6 +123,7 @@ class CancellationAgent:
                 "refund": None,
                 "audit_log_id": audit["audit_log_id"],
                 "customer_id": customer_id,
+                "customer": _customer_summary(customer),
             }
 
         if accept_retention_offer:
@@ -130,6 +144,7 @@ class CancellationAgent:
                 "refund": None,
                 "audit_log_id": audit["audit_log_id"],
                 "customer_id": customer_id,
+                "customer": _customer_summary(customer),
             }
 
         # Step 7: Offer rejected — calculate the prorated refund.
@@ -158,4 +173,5 @@ class CancellationAgent:
             "refund": refund,
             "audit_log_id": audit["audit_log_id"],
             "customer_id": customer_id,
+            "customer": _customer_summary(customer),
         }

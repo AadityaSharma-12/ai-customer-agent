@@ -26,6 +26,13 @@ def test_first_turn_presents_retention_offer_and_does_not_cancel():
     assert response["status"] == "retention_offer_presented"
     assert response["offer"]["type"] == "20% discount"
     assert response["refund"] is None
+    assert response["customer"] == {
+        "name": "John Doe",
+        "email": "john.doe@example.com",
+        "plan": "Premium",
+        "status": "Active",
+        "subscription_start": "2026-01-01",
+    }
     assert zoho_client.get_customer("123")["status"] == "Active"
 
 
@@ -75,6 +82,8 @@ def test_full_cancellation_flow_after_offer_declined():
     assert final["refund"] == 666.67  # 10 days used of a 30-day, ₹1000 cycle starting 2026-01-01
     assert final["audit_log_id"] is not None
     assert "cancelled" in final["message"].lower()
+    assert final["customer"]["name"] == "John Doe"
+    assert final["customer"]["plan"] == "Premium"
     assert zoho_client.get_customer("123")["status"] == "Cancelled"
 
 
@@ -84,6 +93,7 @@ def test_invalid_customer_returns_error_without_touching_account():
     assert response["status"] == "invalid_customer"
     assert response["offer"] is None
     assert response["refund"] is None
+    assert response["customer"] is None
     assert zoho_client.get_audit_logs() == []
 
 
@@ -118,4 +128,5 @@ def test_zoho_mcp_failure_returns_service_unavailable():
 
     assert response["status"] == "service_unavailable"
     assert response["offer"] is None
+    assert response["customer"] is None
     assert zoho_client.get_customer("000")["status"] == "Active"

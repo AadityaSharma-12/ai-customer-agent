@@ -20,6 +20,13 @@ env/
 htmlcov/
 coverage.xml
 
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+frontend/*.tsbuildinfo
+
 # Editors
 .vscode/
 .idea/

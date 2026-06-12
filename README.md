@@ -112,7 +112,14 @@ curl -X POST http://127.0.0.1:8000/cancel-account \
   "offer": {"type": "20% discount", "description": "...", "eligibility_reason": "Customer is on the Premium plan."},
   "refund": null,
   "audit_log_id": 1,
-  "customer_id": "123"
+  "customer_id": "123",
+  "customer": {
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "plan": "Premium",
+    "status": "Active",
+    "subscription_start": "2026-01-01"
+  }
 }
 ```
 
@@ -132,7 +139,14 @@ curl -X POST http://127.0.0.1:8000/cancel-account \
   "offer": {"type": "20% discount", "description": "...", "eligibility_reason": "..."},
   "refund": 666.67,
   "audit_log_id": 2,
-  "customer_id": "123"
+  "customer_id": "123",
+  "customer": {
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "plan": "Premium",
+    "status": "Active",
+    "subscription_start": "2026-01-01"
+  }
 }
 ```
 
@@ -152,12 +166,64 @@ anything.
 | `000`       | Premium    | Subscription record simulated as out-of-sync (Zoho MCP failure) |
 | _(anything else)_ | — | Unknown customer — `invalid_customer` response |
 
+## Frontend
+
+The `frontend/` directory is a Next.js 14 app with two modes:
+
+- **Showcase** (`/`) — a polished, scripted demo of the agent UI replaying
+  pre-recorded transcripts from `frontend/src/data/scenarios.ts`. Useful for
+  presenting the workflow without a backend running.
+- **Live Agent** (`/live`) — a real client for the backend above. It calls
+  `POST /cancel-account` for the customer ID and message you enter, and
+  renders the actual response (chat, workflow timeline, retention offer,
+  refund, audit log ID, customer profile) — nothing fabricated. Use the
+  sample customer IDs below to exercise each scenario.
+
+### Running the frontend in development
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Opens on `http://localhost:3000`. For `/live` to reach the backend, create
+`frontend/.env.local` with:
+
+```text
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+and run the backend separately with `uvicorn app.api.main:app --reload`
+(CORS is already configured to allow `http://localhost:3000`).
+
+### Production build
+
+```bash
+cd frontend
+npm run build
+```
+
+`next.config.js` is configured with `output: 'export'`, so this produces a
+static site in `frontend/out/`. When that directory exists, `app/api/main.py`
+automatically serves it — `/` and `/live` are served same-origin alongside
+the API, so no `NEXT_PUBLIC_API_BASE_URL` is needed in production (an empty
+base URL means same-origin requests).
+
 ## Docker
+
+The `Dockerfile` is a multi-stage build: a Node stage builds the frontend
+(`frontend/out/`), then a slim Python stage copies the app code and the built
+frontend and runs `uvicorn`. The final image has no Node runtime.
 
 ```bash
 docker build -t ai-customer-agent .
 docker run -p 8080:8080 ai-customer-agent
 ```
+
+Visiting `http://localhost:8080/` serves the Showcase UI, `/live` serves the
+Live Agent UI (backed by the same container's API), and `/cancel-account` /
+`/health` remain available as JSON endpoints.
 
 ## CI/CD
 
