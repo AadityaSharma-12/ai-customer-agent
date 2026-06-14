@@ -128,7 +128,7 @@ class CancellationAgent:
 
         if accept_retention_offer:
             # Step 6: Offer accepted — update the account, end the workflow.
-            tools.update_account(customer_id, "Active")
+            customer = tools.update_account(customer_id, "Active")
             audit = tools.create_audit_log(
                 customer_id,
                 action="retention_offer_accepted",
@@ -152,7 +152,7 @@ class CancellationAgent:
         billing_cycle_days = policy.get("refund_policy", {}).get("billing_cycle_days", 30)
 
         # Step 8: Cancel the subscription (Zoho MCP write).
-        tools.cancel_account(customer_id)
+        customer = tools.cancel_account(customer_id)
 
         # Step 9: Create the audit log entry for the cancellation.
         audit = tools.create_audit_log(

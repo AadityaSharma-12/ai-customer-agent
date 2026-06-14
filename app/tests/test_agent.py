@@ -44,6 +44,7 @@ def test_retention_offer_accepted_keeps_account_active():
 
     assert response["status"] == "retained"
     assert response["refund"] is None
+    assert response["customer"]["status"] == "Active"
     assert zoho_client.get_customer("123")["status"] == "Active"
     logs = zoho_client.get_audit_logs()
     assert any(log["action"] == "retention_offer_accepted" for log in logs)
@@ -57,6 +58,7 @@ def test_retention_offer_declined_proceeds_to_cancellation():
 
     assert response["status"] == "cancelled"
     assert response["refund"] is not None
+    assert response["customer"]["status"] == "Cancelled"
     assert zoho_client.get_customer("123")["status"] == "Cancelled"
     logs = zoho_client.get_audit_logs()
     assert any(log["action"] == "account_cancelled" for log in logs)
