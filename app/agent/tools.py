@@ -10,6 +10,7 @@ from datetime import date
 
 from app.kb import load_cancellation_policy
 from app.mcp import zoho_client
+from app.services import intent_service
 from app.services.refund_service import calculate_refund as _calculate_refund
 from app.services.retention_service import generate_retention_offer as _generate_retention_offer
 
@@ -68,6 +69,16 @@ def cancel_account(customer_id: str) -> dict:
 def update_account(customer_id: str, status: str) -> dict:
     """Update the subscription status (used when a retention offer is accepted)."""
     return zoho_client.update_subscription_status(customer_id, status)
+
+
+def classify_cancellation_intent(message: str) -> bool:
+    """Determine whether a free-text message is a cancellation request."""
+    return intent_service.classify_cancellation_intent(message)
+
+
+def classify_offer_decision(message: str, offer: dict) -> str:
+    """Classify a free-text reply to a retention offer as accept/decline/unclear."""
+    return intent_service.classify_offer_decision(message, offer)
 
 
 def create_audit_log(customer_id: str, action: str, details: dict) -> dict:

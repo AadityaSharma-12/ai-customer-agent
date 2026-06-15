@@ -44,9 +44,9 @@ jobs:
     needs: docker-build
     # This job intentionally does NOT run automatically on push. Deploying to
     # Cloud Run requires a configured GCP project, billing account, and the
-    # GCP_PROJECT_ID / GCP_SA_KEY repository secrets described in
-    # docs/deployment.md. Until those secrets exist this job is a documented
-    # placeholder — trigger it manually (workflow_dispatch) once they're set up.
+    # GCP_PROJECT_ID / GCP_SA_KEY repository secrets. Until those secrets
+    # exist this job is a documented placeholder — trigger it manually
+    # (workflow_dispatch) once they're set up.
     if: github.event_name == 'workflow_dispatch'
     environment: production
     steps:

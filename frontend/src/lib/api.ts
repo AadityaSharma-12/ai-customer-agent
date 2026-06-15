@@ -17,3 +17,13 @@ export async function cancelAccount(
 
   return res.json() as Promise<CancelAccountResponse>;
 }
+
+export async function resetSession(customerId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/session/${customerId}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Request failed with status ${res.status}`);
+  }
+}

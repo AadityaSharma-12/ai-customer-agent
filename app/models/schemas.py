@@ -8,9 +8,11 @@ class CancelAccountRequest(BaseModel):
     accept_retention_offer: bool | None = Field(
         default=None,
         description=(
-            "Set on a follow-up call once a retention offer has been presented: "
-            "true to accept and stay subscribed, false to proceed with cancellation. "
-            "Omit (or null) on the first call to receive the retention offer."
+            "Optional explicit override: true to accept a previously-presented "
+            "retention offer and stay subscribed, false to proceed with "
+            "cancellation. Normally omitted (or null) — in that case the "
+            "customer's free-text `message` is classified by the agent to "
+            "decide the next step (see CancelAccountResponse.status)."
         ),
     )
 
@@ -30,6 +32,9 @@ class CustomerSummary(BaseModel):
 
 
 class CancelAccountResponse(BaseModel):
+    #: One of: "invalid_customer", "service_unavailable", "off_topic",
+    #: "retention_offer_presented", "clarification_needed", "retained",
+    #: "cancelled".
     status: str
     message: str
     offer: RetentionOffer | None = None

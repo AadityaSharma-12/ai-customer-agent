@@ -5,8 +5,6 @@ cancellation requests end-to-end: authentication, profile lookup, retention
 offers, prorated refund calculation, account cancellation, and audit logging
 — all behind a single FastAPI endpoint.
 
-Built to satisfy the assessment spec in [`CLAUDE.md`](CLAUDE.md).
-
 ## Architecture
 
 ```text
@@ -40,9 +38,17 @@ for the reasoning. It enforces the same behavioural contract the spec's
 "system rules" describe (verify identity first, always attempt retention,
 use only KB data, explain refund calculations, log every action), which
 makes the whole workflow deterministic, fully unit-testable, and free of
-any external API dependency — while remaining straightforward to front with
-an LLM later if conversational free-text handling is desired (the
-`SYSTEM_RULES` constant is kept as a ready-to-use system prompt for that).
+any external API dependency for its core logic.
+
+The only place an LLM is involved is understanding the customer's free-text
+messages: [`app/services/intent_service.py`](app/services/intent_service.py)
+uses Gemini (via `google-genai`) for two narrow classifications — "is this a
+cancellation request?" and "did the customer accept or decline the retention
+offer?". All refund math, retention eligibility, KB lookups, and audit
+logging remain entirely deterministic and unaffected by the LLM. If Gemini is
+unavailable or unconfigured, both classifiers fail safe (default to
+proceeding / asking the customer to clarify), so the agent degrades
+gracefully instead of erroring.
 
 ### A note on Zoho MCP
 
@@ -51,8 +57,9 @@ with sample customers, exposing the same function signatures
 (`get_customer`, `get_subscription`, `update_subscription_status`,
 `create_audit_log`) a real Zoho MCP-backed client would. This keeps the
 project fully runnable and testable offline. Swapping in a real integration
-later should not require any change to the agent or tools layer — see
-[`.env.example`](.env.example) for the credentials a live integration would need.
+later should not require any change to the agent or tools layer — see the
+environment variables section below for the credentials a live integration
+would need.
 
 ## Project layout
 
@@ -62,9 +69,10 @@ app/
 ├── api/        # FastAPI app & routes
 ├── kb/         # Knowledge base (cancellation policy JSON + loader)
 ├── mcp/        # Mock Zoho MCP client
-├── services/   # Refund calculator & retention engine (business rules)
+├── services/   # Refund calculator, retention engine, intent (Gemini)
+│               # classification, in-memory session store
 ├── models/     # Pydantic request/response schemas
-└── tests/      # pytest suite (26 tests, ~98% coverage)
+└── tests/      # pytest suite (45 tests, ~95% coverage)
 ```
 
 ## Running locally
@@ -79,6 +87,31 @@ uvicorn app.api.main:app --reload
 
 The API is now available at `http://127.0.0.1:8000` (interactive docs at `/docs`).
 
+### Optional: enabling free-text conversation (Gemini)
+
+The endpoint works fully without any LLM configured — every test mocks the
+classifier, and the agent falls back to safe defaults if no API key is set.
+To enable real free-text understanding (e.g. "nah still want to cancel"
+instead of an explicit `accept_retention_offer` flag), create a `.env` file
+in the project root with:
+
+```text
+GOOGLE_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.0-flash
+```
+
+`GEMINI_MODEL` defaults to `gemini-2.0-flash` if unset.
+
+### Environment variables reference
+
+| Variable | Required? | Purpose |
+|----------|-----------|---------|
+| `GOOGLE_API_KEY` | Optional | Gemini API key for free-text intent/decision classification. Without it, the agent falls back to safe defaults. |
+| `GEMINI_MODEL` | Optional | Gemini model name (default `gemini-2.0-flash`). |
+| `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`, `ZOHO_ORG_ID`, `ZOHO_API_BASE_URL` | Not used | The current build uses `app/mcp/zoho_client.py`, an in-memory mock client, so none of these are required to run or test the project locally. Reserved for a future live Zoho integration. |
+
+`.env` is gitignored — never commit it.
+
 ## Running the tests
 
 ```bash
@@ -87,14 +120,15 @@ pytest
 
 This runs the full suite with coverage (`pytest-cov`, configured in
 `pyproject.toml`) and fails if coverage drops below 80%. Current coverage is
-~98%.
+~95%.
 
 ## Demo flow
 
 This mirrors the spec's Phase 15 demo script. The workflow is two calls: the
 first call always returns a retention offer (retention must always be
 attempted before cancellation); the second call carries the customer's
-decision.
+decision — either as an explicit `accept_retention_offer: true/false`, or as
+a free-text reply that Gemini classifies (see below).
 
 **1) Customer asks to cancel — agent authenticates, fetches the profile, and
 presents a retention offer:**
@@ -155,6 +189,28 @@ agent keeps the subscription active, applies the offer, logs the decision,
 and ends the workflow without ever calculating a refund or cancelling
 anything.
 
+### Free-text conversation
+
+`accept_retention_offer` can be omitted entirely. In that case the agent
+reads the customer's `message` and, with Gemini configured, classifies it:
+
+- First message, e.g. `"I want to cancel my subscription"` →
+  `retention_offer_presented` (same as above).
+- A message that isn't about cancellation at all, e.g. `"what's the weather
+  today?"` → `status: "off_topic"` — the agent explains what it can help with
+  and does not authenticate, fetch data, or write an audit log.
+- After an offer has been presented, a reply that clearly accepts or declines
+  it (e.g. `"ok fine keep it"` / `"no, still cancel"`) drives the same
+  `retained` / `cancelled` outcomes as the explicit-flag flow.
+- A reply that doesn't clearly indicate either → `status:
+  "clarification_needed"` — the agent re-presents the same offer and asks the
+  customer to confirm. The pending offer is tracked server-side in
+  `app/services/session_store.py`, keyed by `customer_id`.
+
+`DELETE /session/{customer_id}` clears any pending offer for that customer,
+letting a new conversation start fresh (used by the `/live` frontend's "New
+conversation" button).
+
 ### Sample customer IDs (seeded in the mock Zoho datastore)
 
 | customer_id | plan       | scenario it demonstrates                              |
@@ -173,11 +229,13 @@ The `frontend/` directory is a Next.js 14 app with two modes:
 - **Showcase** (`/`) — a polished, scripted demo of the agent UI replaying
   pre-recorded transcripts from `frontend/src/data/scenarios.ts`. Useful for
   presenting the workflow without a backend running.
-- **Live Agent** (`/live`) — a real client for the backend above. It calls
-  `POST /cancel-account` for the customer ID and message you enter, and
-  renders the actual response (chat, workflow timeline, retention offer,
-  refund, audit log ID, customer profile) — nothing fabricated. Use the
-  sample customer IDs below to exercise each scenario.
+- **Live Agent** (`/live`) — a real client for the backend above. Pick a
+  customer ID and chat with the agent in free text — every message is sent
+  to `POST /cancel-account` and the response (chat reply, workflow timeline,
+  retention offer, refund, audit log ID, customer profile) is rendered as-is,
+  nothing fabricated. "New conversation" clears the chat and the pending
+  retention-offer session for that customer. Use the sample customer IDs
+  below to exercise each scenario.
 
 ### Running the frontend in development
 
@@ -235,9 +293,14 @@ push/PR to `main`:
 3. Build the Docker image
 
 A `deploy` job is included but gated behind a manual `workflow_dispatch`
-trigger — see [`docs/deployment.md`](docs/deployment.md) for the one-time GCP
-setup (service account, secrets) required to enable automatic deploys to
-Cloud Run, and for the manual `gcloud` commands to deploy directly.
+trigger. It requires a one-time GCP setup (service account + `GCP_PROJECT_ID`
+/ `GCP_SA_KEY` repository secrets) before it can deploy to Cloud Run. To
+deploy manually instead:
+
+```bash
+gcloud builds submit
+gcloud run deploy ai-customer-agent --source . --allow-unauthenticated --region us-central1
+```
 
 ## Knowledge base
 

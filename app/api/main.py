@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.agent.agent import CancellationAgent
 from app.models.schemas import CancelAccountRequest, CancelAccountResponse
+from app.services import session_store
 
 app = FastAPI(
     title="AI Customer Service Agent — Account Cancellation",
@@ -46,6 +47,16 @@ def cancel_account(request: CancelAccountRequest) -> dict:
         message=request.message,
         accept_retention_offer=request.accept_retention_offer,
     )
+
+
+@app.delete("/session/{customer_id}")
+def reset_session(customer_id: str) -> dict:
+    """Clear any in-progress retention-offer session for this customer.
+
+    Used by the frontend to start a fresh conversation.
+    """
+    session_store.clear_session(customer_id)
+    return {"status": "ok"}
 
 
 # Serve the statically-exported Next.js frontend (built via `npm run build`

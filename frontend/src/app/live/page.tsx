@@ -9,7 +9,7 @@ import { LiveChat, LiveChatMessage } from "../../components/live/LiveChat";
 import { LiveWorkflow, buildWorkflowStates } from "../../components/live/LiveWorkflow";
 import { LiveResultPanel } from "../../components/live/LiveResultPanel";
 import { LiveProfile } from "../../components/live/LiveProfile";
-import { cancelAccount } from "../../lib/api";
+import { cancelAccount, resetSession } from "../../lib/api";
 import { CancelAccountResponse } from "../../lib/types";
 
 function timestamp(): string {
@@ -18,23 +18,20 @@ function timestamp(): string {
 
 export default function LivePage() {
   const [customerId, setCustomerId] = React.useState("123");
-  const [message, setMessage] = React.useState("I want to cancel my subscription.");
   const [messages, setMessages] = React.useState<LiveChatMessage[]>([]);
   const [response, setResponse] = React.useState<CancelAccountResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const awaitingDecision = response?.status === "retention_offer_presented";
   const workflowStates = buildWorkflowStates(response);
 
-  const handleSubmit = async () => {
+  const handleSend = async (text: string) => {
     setLoading(true);
     setError(null);
-    setMessages([{ sender: "customer", text: message, timestamp: timestamp() }]);
-    setResponse(null);
+    setMessages((prev) => [...prev, { sender: "customer", text, timestamp: timestamp() }]);
 
     try {
-      const result = await cancelAccount({ customer_id: customerId, message });
+      const result = await cancelAccount({ customer_id: customerId, message: text });
       setResponse(result);
       setMessages((prev) => [
         ...prev,
@@ -47,34 +44,22 @@ export default function LivePage() {
     }
   };
 
-  const handleDecision = async (accept: boolean) => {
-    setLoading(true);
+  const handleNewConversation = async () => {
     setError(null);
-    setMessages((prev) => [
-      ...prev,
-      {
-        sender: "customer",
-        text: accept ? "Yes, I'll take that offer." : "No thanks, please cancel.",
-        timestamp: timestamp(),
-      },
-    ]);
-
+    setMessages([]);
+    setResponse(null);
     try {
-      const result = await cancelAccount({
-        customer_id: customerId,
-        message: accept ? "I'll take that offer." : "No thanks, please cancel.",
-        accept_retention_offer: accept,
-      });
-      setResponse(result);
-      setMessages((prev) => [
-        ...prev,
-        { sender: "ai", text: result.message, timestamp: timestamp() },
-      ]);
+      await resetSession(customerId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed");
-    } finally {
-      setLoading(false);
     }
+  };
+
+  const handleCustomerIdChange = (id: string) => {
+    setCustomerId(id);
+    setMessages([]);
+    setResponse(null);
+    setError(null);
   };
 
   return (
@@ -137,20 +122,12 @@ export default function LivePage() {
           <div className="lg:col-span-5 flex flex-col gap-6">
             <CustomerPicker
               customerId={customerId}
-              setCustomerId={setCustomerId}
-              message={message}
-              setMessage={setMessage}
-              onSubmit={handleSubmit}
-              disabled={loading || awaitingDecision}
+              setCustomerId={handleCustomerIdChange}
+              onNewConversation={handleNewConversation}
+              disabled={loading}
             />
             <div className="flex-1 min-h-[400px]">
-              <LiveChat
-                messages={messages}
-                loading={loading}
-                awaitingDecision={!!awaitingDecision}
-                onAccept={() => handleDecision(true)}
-                onDecline={() => handleDecision(false)}
-              />
+              <LiveChat messages={messages} loading={loading} onSend={handleSend} />
             </div>
           </div>
 

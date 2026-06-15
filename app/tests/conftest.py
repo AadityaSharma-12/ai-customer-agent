@@ -9,6 +9,7 @@ from copy import deepcopy
 import pytest
 
 from app.mcp import zoho_client
+from app.services import session_store
 
 
 @pytest.fixture(autouse=True)
@@ -24,3 +25,10 @@ def reset_zoho_state():
     zoho_client._AUDIT_LOGS.clear()
     zoho_client._AUDIT_LOGS.extend(original_logs)
     zoho_client._audit_log_seq = original_seq
+
+
+@pytest.fixture(autouse=True)
+def reset_session_state():
+    session_store._SESSIONS.clear()
+    yield
+    session_store._SESSIONS.clear()

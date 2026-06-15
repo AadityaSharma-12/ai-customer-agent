@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Users, Send } from "lucide-react";
+import { Users, RotateCcw } from "lucide-react";
 import { Button } from "../ui/button";
 
 const SAMPLE_CUSTOMERS = [
@@ -13,18 +13,14 @@ const SAMPLE_CUSTOMERS = [
 interface CustomerPickerProps {
   customerId: string;
   setCustomerId: (id: string) => void;
-  message: string;
-  setMessage: (message: string) => void;
-  onSubmit: () => void;
+  onNewConversation: () => void;
   disabled: boolean;
 }
 
 export const CustomerPicker: React.FC<CustomerPickerProps> = ({
   customerId,
   setCustomerId,
-  message,
-  setMessage,
-  onSubmit,
+  onNewConversation,
   disabled,
 }) => {
   return (
@@ -73,28 +69,14 @@ export const CustomerPicker: React.FC<CustomerPickerProps> = ({
           />
         </div>
 
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-            Message
-          </label>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            disabled={disabled}
-            rows={2}
-            placeholder="I want to cancel my subscription."
-            className="glass-input w-full rounded-lg px-3 py-2 text-xs resize-none disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-        </div>
-
         <Button
-          variant="primary"
-          onClick={onSubmit}
-          disabled={disabled || !customerId.trim() || !message.trim()}
+          variant="glass"
+          onClick={onNewConversation}
+          disabled={disabled || !customerId.trim()}
           className="w-full flex items-center justify-center gap-1.5 text-xs"
         >
-          <Send size={12} />
-          Send to agent
+          <RotateCcw size={12} />
+          New conversation
         </Button>
       </div>
     </div>

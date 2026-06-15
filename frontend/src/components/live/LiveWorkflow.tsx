@@ -52,7 +52,14 @@ export function buildWorkflowStates(
 
   set("fetch_profile", "completed");
 
-  if (response.status === "retention_offer_presented") {
+  if (response.status === "off_topic") {
+    return base;
+  }
+
+  if (
+    response.status === "retention_offer_presented" ||
+    response.status === "clarification_needed"
+  ) {
     set("retention_offer", "completed");
     set("decision", "active");
     return base;

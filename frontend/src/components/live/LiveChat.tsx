@@ -1,6 +1,6 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, MessageSquareCode, Check, X } from "lucide-react";
+import { Sparkles, MessageSquareCode, Send } from "lucide-react";
 import { Button } from "../ui/button";
 
 export interface LiveChatMessage {
@@ -12,19 +12,19 @@ export interface LiveChatMessage {
 interface LiveChatProps {
   messages: LiveChatMessage[];
   loading: boolean;
-  awaitingDecision: boolean;
-  onAccept: () => void;
-  onDecline: () => void;
+  onSend: (text: string) => void;
 }
 
-export const LiveChat: React.FC<LiveChatProps> = ({
-  messages,
-  loading,
-  awaitingDecision,
-  onAccept,
-  onDecline,
-}) => {
+export const LiveChat: React.FC<LiveChatProps> = ({ messages, loading, onSend }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = React.useState("");
+
+  const handleSend = () => {
+    const text = draft.trim();
+    if (!text || loading) return;
+    onSend(text);
+    setDraft("");
+  };
 
   React.useEffect(() => {
     if (containerRef.current) {
@@ -128,43 +128,32 @@ export const LiveChat: React.FC<LiveChatProps> = ({
       </div>
 
       <div className="p-4 border-t border-zinc-800/80 bg-zinc-950/40 relative">
-        {awaitingDecision ? (
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-zinc-300 flex-1">
-              Accept the retention offer and stay subscribed?
-            </span>
-            <Button
-              variant="glass-accent"
-              onClick={onAccept}
-              disabled={loading}
-              className="flex items-center gap-1.5 text-xs"
-            >
-              <Check size={12} />
-              Accept
-            </Button>
-            <Button
-              variant="glass"
-              onClick={onDecline}
-              disabled={loading}
-              className="flex items-center gap-1.5 text-xs"
-            >
-              <X size={12} />
-              Decline & cancel
-            </Button>
-          </div>
-        ) : (
-          <div className="relative flex items-center rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
-            <input
-              disabled
-              placeholder={
-                loading
-                  ? "Agent is processing your request..."
-                  : "Use the Customer Lookup panel to send a message"
+        <div className="relative flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
               }
-              className="flex-1 bg-transparent text-xs text-zinc-400 outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed"
-            />
-          </div>
-        )}
+            }}
+            disabled={loading}
+            placeholder={
+              loading ? "Agent is processing your request..." : "Type a message to the agent..."
+            }
+            className="flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed"
+          />
+          <Button
+            variant="primary"
+            onClick={handleSend}
+            disabled={loading || !draft.trim()}
+            className="flex items-center gap-1.5 text-xs shrink-0"
+          >
+            <Send size={12} />
+            Send
+          </Button>
+        </div>
       </div>
     </div>
   );

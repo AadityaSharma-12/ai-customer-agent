@@ -13,6 +13,11 @@ env/
 
 # Environment / secrets
 .env
+.env.example
+
+# Internal/assessment-only docs
+/CLAUDE.md
+/docs/
 
 # Testing / coverage
 .pytest_cache/
