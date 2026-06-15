@@ -79,7 +79,7 @@ export default function LivePage() {
           </div>
           <div>
             <h1 className="text-sm font-semibold tracking-wider text-zinc-100 uppercase">
-              AETHELGARD
+              INNOVATENOW
             </h1>
             <span className="text-[9px] text-zinc-500 font-mono">
               v4.1.0-RETAIN-AGENT — Live Mode
@@ -145,7 +145,7 @@ export default function LivePage() {
       </main>
 
       <footer className="border-t border-zinc-900/60 bg-zinc-950/80 backdrop-blur py-4 text-center text-[9px] text-zinc-600 font-mono relative z-10">
-        Aethelgard AI Command Center Console — Live Agent Mode. Calls the real FastAPI backend.
+        InnovateNow AI Command Center Console — Live Agent Mode. Calls the real FastAPI backend.
       </footer>
     </div>
   );

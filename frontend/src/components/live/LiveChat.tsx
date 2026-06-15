@@ -17,6 +17,7 @@ interface LiveChatProps {
 
 export const LiveChat: React.FC<LiveChatProps> = ({ messages, loading, onSend }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
   const [draft, setDraft] = React.useState("");
 
   const handleSend = () => {
@@ -31,6 +32,12 @@ export const LiveChat: React.FC<LiveChatProps> = ({ messages, loading, onSend })
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [messages, loading]);
+
+  React.useEffect(() => {
+    if (!loading) {
+      inputRef.current?.focus();
+    }
+  }, [loading]);
 
   return (
     <div className="glass-panel rounded-xl flex flex-col h-[500px] lg:h-full relative overflow-hidden">
@@ -130,6 +137,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ messages, loading, onSend })
       <div className="p-4 border-t border-zinc-800/80 bg-zinc-950/40 relative">
         <div className="relative flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
           <input
+            ref={inputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {

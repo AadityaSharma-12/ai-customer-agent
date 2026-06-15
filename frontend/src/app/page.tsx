@@ -111,7 +111,7 @@ export default function WorkspacePage() {
 
       {/* Footer credits bar */}
       <footer className="border-t border-zinc-900/60 bg-zinc-950/80 backdrop-blur py-4 text-center text-[9px] text-zinc-600 font-mono relative z-10">
-        Aethelgard AI Command Center Console. Built with Google ADK, Gemini 1.5 Pro, and Zoho MCP.
+        InnovateNow AI Command Center Console. Built with Google ADK, Gemini 1.5 Pro, and Zoho MCP.
       </footer>
     </div>
   );

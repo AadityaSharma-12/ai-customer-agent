@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Aethelgard AI | Customer Cancellation & Retention Portal",
+  title: "InnovateNow AI | Customer Cancellation & Retention Portal",
   description: "Next-generation AI operations command center for customer success, retention audits, and Zoho integration logs.",
 };
 

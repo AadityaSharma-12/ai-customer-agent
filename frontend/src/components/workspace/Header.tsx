@@ -42,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <div>
             <h1 className="text-sm font-semibold tracking-wider text-zinc-100 uppercase">
-              AETHELGARD
+              INNOVATENOW
             </h1>
             <span className="text-[9px] text-zinc-500 font-mono">
               v4.1.0-RETAIN-AGENT
