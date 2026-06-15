@@ -21,12 +21,14 @@ def test_classify_cancellation_intent_without_api_key_defaults_true(monkeypatch)
     assert intent_service.classify_cancellation_intent("what's the weather?") is True
 
 
-def test_classify_offer_decision_without_api_key_defaults_unclear(monkeypatch):
+def test_classify_offer_decision_without_api_key_uses_keyword_fallback(monkeypatch):
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
 
-    decision = intent_service.classify_offer_decision("ok", {"type": "20% discount", "description": "..."})
+    offer = {"type": "20% discount", "description": "..."}
 
-    assert decision == "unclear"
+    assert intent_service.classify_offer_decision("hmm, not sure", offer) == "unclear"
+    assert intent_service.classify_offer_decision("yes, I'll keep it", offer) == "accept"
+    assert intent_service.classify_offer_decision("no thanks, cancel it", offer) == "decline"
 
 
 class _FakeResponse:
@@ -103,7 +105,7 @@ def test_classify_offer_decision_parses_decline(monkeypatch):
     assert decision == "decline"
 
 
-def test_classify_offer_decision_falls_back_to_unclear_on_error(monkeypatch):
+def test_classify_offer_decision_falls_back_to_keyword_classification_on_error(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
 
     def _boom():
@@ -113,6 +115,24 @@ def test_classify_offer_decision_falls_back_to_unclear_on_error(monkeypatch):
 
     offer = {"type": "20% discount", "description": "20% off your next bill"}
     assert intent_service.classify_offer_decision("hmm", offer) == "unclear"
+    assert intent_service.classify_offer_decision("no, still cancel it", offer) == "decline"
+    assert intent_service.classify_offer_decision("ok fine I'll stay", offer) == "accept"
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        ("hmm", "unclear"),
+        ("I'm not sure what to do", "unclear"),
+        ("no thanks, please cancel", "decline"),
+        ("decline, cancel it", "decline"),
+        ("yes, that discount works, I'll stay", "accept"),
+        ("ok keep my subscription", "accept"),
+        ("no, I'll keep it actually", "unclear"),
+    ],
+)
+def test_keyword_fallback_decision(message, expected):
+    assert intent_service._keyword_fallback_decision(message) == expected
 
 
 def test_get_client_returns_none_without_api_key(monkeypatch):
@@ -123,7 +143,7 @@ def test_get_client_returns_none_without_api_key(monkeypatch):
 
 def test_model_name_defaults(monkeypatch):
     monkeypatch.delenv("GEMINI_MODEL", raising=False)
-    assert intent_service._model_name() == "gemini-2.0-flash"
+    assert intent_service._model_name() == "gemini-flash-latest"
 
     monkeypatch.setenv("GEMINI_MODEL", "gemini-custom")
     assert intent_service._model_name() == "gemini-custom"

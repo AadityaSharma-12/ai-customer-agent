@@ -10,6 +10,7 @@ returns something unparseable, they fall back to a default rather than
 raising, so the agent degrades gracefully instead of 500ing.
 """
 import os
+import re
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -17,7 +18,16 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-_DEFAULT_MODEL = "gemini-2.0-flash"
+_DEFAULT_MODEL = "gemini-flash-latest"
+
+_DECLINE_KEYWORDS = (
+    "cancel", "decline", "no", "nope", "not interested", "don't want",
+    "remove", "end my", "stop",
+)
+_ACCEPT_KEYWORDS = (
+    "accept", "keep", "stay", "yes", "ok", "okay",
+    "sounds good", "that works", "i'll take it",
+)
 
 
 class CancellationIntent(BaseModel):
@@ -26,6 +36,23 @@ class CancellationIntent(BaseModel):
 
 class OfferDecision(BaseModel):
     decision: Literal["accept", "decline", "unclear"]
+
+
+def _keyword_fallback_decision(message: str) -> Literal["accept", "decline", "unclear"]:
+    """Lightweight local classification used when Gemini is unavailable or rate-limited.
+
+    Looks for clear accept/decline wording. If both or neither are present,
+    the reply is genuinely ambiguous and "unclear" is the right answer.
+    """
+    text = message.lower()
+    has_decline = any(re.search(r"\b" + re.escape(word) + r"\b", text) for word in _DECLINE_KEYWORDS)
+    has_accept = any(re.search(r"\b" + re.escape(word) + r"\b", text) for word in _ACCEPT_KEYWORDS)
+
+    if has_decline and not has_accept:
+        return "decline"
+    if has_accept and not has_decline:
+        return "accept"
+    return "unclear"
 
 
 _client = None
@@ -68,6 +95,7 @@ def classify_cancellation_intent(message: str) -> bool:
             config={
                 "response_mime_type": "application/json",
                 "response_schema": CancellationIntent,
+                "http_options": {"timeout": 10000},
             },
         )
         return response.parsed.is_cancellation_request
@@ -80,7 +108,7 @@ def classify_offer_decision(message: str, offer: dict) -> Literal["accept", "dec
     try:
         client = _get_client()
         if client is None:
-            return "unclear"
+            return _keyword_fallback_decision(message)
 
         response = client.models.generate_content(
             model=_model_name(),
@@ -98,8 +126,9 @@ def classify_offer_decision(message: str, offer: dict) -> Literal["accept", "dec
             config={
                 "response_mime_type": "application/json",
                 "response_schema": OfferDecision,
+                "http_options": {"timeout": 10000},
             },
         )
         return response.parsed.decision
     except Exception:
-        return "unclear"
+        return _keyword_fallback_decision(message)

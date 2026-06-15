@@ -97,17 +97,17 @@ in the project root with:
 
 ```text
 GOOGLE_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-flash-latest
 ```
 
-`GEMINI_MODEL` defaults to `gemini-2.0-flash` if unset.
+`GEMINI_MODEL` defaults to `gemini-flash-latest` if unset.
 
 ### Environment variables reference
 
 | Variable | Required? | Purpose |
 |----------|-----------|---------|
 | `GOOGLE_API_KEY` | Optional | Gemini API key for free-text intent/decision classification. Without it, the agent falls back to safe defaults. |
-| `GEMINI_MODEL` | Optional | Gemini model name (default `gemini-2.0-flash`). |
+| `GEMINI_MODEL` | Optional | Gemini model name (default `gemini-flash-latest`). |
 | `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`, `ZOHO_ORG_ID`, `ZOHO_API_BASE_URL` | Not used | The current build uses `app/mcp/zoho_client.py`, an in-memory mock client, so none of these are required to run or test the project locally. Reserved for a future live Zoho integration. |
 
 `.env` is gitignored — never commit it.
