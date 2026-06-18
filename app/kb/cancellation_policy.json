@@ -37,6 +37,21 @@
       "offer": "Free month",
       "eligibility": "New users (<30 days)",
       "description": "One additional month of service at no charge for customers within their first 30 days."
+    },
+    {
+      "offer": "Pause plan",
+      "eligibility": "Usage concern",
+      "description": "Pause billing for 30 days so the customer can return when they have a clearer need."
+    },
+    {
+      "offer": "Priority support escalation",
+      "eligibility": "Technical issue",
+      "description": "Escalate the issue to priority support and keep the subscription active while it is investigated."
+    },
+    {
+      "offer": "Competitive review",
+      "eligibility": "Competitor concern",
+      "description": "Review the competing option and see whether a discount or plan adjustment can match the customer's needs."
     }
   ],
   "cancellation_rules": {

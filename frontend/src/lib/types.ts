@@ -18,8 +18,18 @@ export interface CancelAccountRequest {
   accept_retention_offer?: boolean | null;
 }
 
+export type CancelAccountStatus =
+  | "invalid_customer"
+  | "service_unavailable"
+  | "off_topic"
+  | "concern_followup"
+  | "retention_offer_presented"
+  | "clarification_needed"
+  | "retained"
+  | "cancelled";
+
 export interface CancelAccountResponse {
-  status: string;
+  status: CancelAccountStatus;
   message: string;
   offer: RetentionOffer | null;
   refund: number | null;

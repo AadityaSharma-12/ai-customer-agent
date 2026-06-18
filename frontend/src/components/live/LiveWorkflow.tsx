@@ -56,6 +56,11 @@ export function buildWorkflowStates(
     return base;
   }
 
+  if (response.status === "concern_followup") {
+    set("retention_offer", "active", "Understand cancellation reason");
+    return base;
+  }
+
   if (
     response.status === "retention_offer_presented" ||
     response.status === "clarification_needed"

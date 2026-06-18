@@ -73,6 +73,73 @@ def test_off_topic_message_does_not_present_offer_or_log(monkeypatch):
     assert zoho_client.get_audit_logs() == []
 
 
+def test_greeting_starts_conversation_without_retention_offer():
+    response = _agent().handle_request("123", "hi", today=TODAY)
+
+    assert response["status"] == "off_topic"
+    assert "Tell me what's going on" in response["message"]
+    assert response["offer"] is None
+    assert response["audit_log_id"] is None
+    assert session_store.get_session("123") is None
+    assert zoho_client.get_audit_logs() == []
+
+
+def test_price_concern_asks_followup_before_presenting_offer():
+    agent = _agent()
+
+    first = agent.handle_request("123", "I'm unhappy with the price", today=TODAY)
+
+    assert first["status"] == "concern_followup"
+    assert "pricing" in first["message"].lower()
+    assert first["offer"] is None
+    assert session_store.get_session("123")["cancellation_reason"] == "price"
+    assert zoho_client.get_audit_logs() == []
+
+    second = agent.handle_request("123", "yes, I want to cancel", today=TODAY)
+
+    assert second["status"] == "retention_offer_presented"
+    assert second["offer"]["type"] == "20% discount"
+    assert "price" in second["offer"]["eligibility_reason"].lower()
+    logs = zoho_client.get_audit_logs()
+    assert logs[-1]["details"]["cancellation_reason"] == "price"
+
+
+def test_usage_concern_gets_pause_offer_after_confirmation():
+    agent = _agent()
+
+    first = agent.handle_request("123", "I don't use this anymore", today=TODAY)
+    assert first["status"] == "concern_followup"
+
+    second = agent.handle_request("123", "go ahead, cancel it", today=TODAY)
+
+    assert second["status"] == "retention_offer_presented"
+    assert second["offer"]["type"] == "Pause plan"
+
+
+def test_technical_concern_gets_support_escalation_after_confirmation():
+    agent = _agent()
+
+    first = agent.handle_request("123", "The product is too slow", today=TODAY)
+    assert first["status"] == "concern_followup"
+
+    second = agent.handle_request("123", "yes, cancel my plan", today=TODAY)
+
+    assert second["status"] == "retention_offer_presented"
+    assert second["offer"]["type"] == "Priority support escalation"
+
+
+def test_competitor_concern_gets_competitive_review_after_confirmation():
+    agent = _agent()
+
+    first = agent.handle_request("123", "I found a cheaper alternative", today=TODAY)
+    assert first["status"] == "concern_followup"
+
+    second = agent.handle_request("123", "I still want to cancel", today=TODAY)
+
+    assert second["status"] == "retention_offer_presented"
+    assert second["offer"]["type"] == "Competitive review"
+
+
 def test_ambiguous_decision_asks_for_clarification_then_resolves(monkeypatch):
     monkeypatch.setattr(tools, "classify_cancellation_intent", lambda message: True)
 

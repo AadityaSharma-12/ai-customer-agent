@@ -1,17 +1,9 @@
-"""Cancellation & Retention agent — workflow orchestrator (spec Phase 7).
+"""Cancellation & Retention agent - workflow orchestrator (spec Phase 7).
 
-This implements the 10-step workflow as a deterministic state machine rather
-than wrapping an LLM call. The "system rules" from spec Phase 9 are encoded
-here as the rules the workflow *follows* (verify identity first, always
-attempt retention, use only KB data, explain refund calculations, log every
-action) — there is no hidden prompt being sent anywhere; the contract those
-rules describe **is** the code below, which keeps the workflow deterministic,
-testable, and free of any framework/API dependency while still satisfying
-every behavioural requirement in the spec.
-
-SYSTEM_RULES is kept as a literal artifact of that prompt-engineering phase —
-useful for documentation, demos, or as the system prompt if this orchestrator
-is ever fronted by an LLM — but it is not sent anywhere by this code.
+This implements the workflow as a deterministic state machine rather than
+wrapping an LLM call. The risky business logic stays testable: verify identity,
+load policy data, attempt retention, explain refund calculations, and log all
+state-changing actions.
 """
 from datetime import date
 
@@ -44,8 +36,55 @@ def _customer_summary(customer: dict) -> dict:
     }
 
 
+def _is_cancellation_confirmation(message: str) -> bool:
+    """Detect short replies that confirm cancellation after a follow-up question."""
+    text = message.strip().lower()
+    confirmation_phrases = (
+        "yes",
+        "yeah",
+        "yep",
+        "correct",
+        "that's right",
+        "that is right",
+        "please cancel",
+        "go ahead",
+        "still cancel",
+        "cancel it",
+        "i want to cancel",
+    )
+    return any(phrase in text for phrase in confirmation_phrases)
+
+
+def _reason_followup_message(reason: str) -> str:
+    if reason == "price":
+        return (
+            "I'm sorry the price is getting in the way. Is pricing the main "
+            "reason you're thinking about cancelling, or is there something "
+            "else going wrong?"
+        )
+    if reason == "usage":
+        return (
+            "That makes sense. If you're not using it much right now, is this "
+            "more about needing a break, or are you looking to cancel fully?"
+        )
+    if reason == "technical_issue":
+        return (
+            "I'm sorry the product has been frustrating. Is the technical issue "
+            "the main reason you're thinking about cancelling?"
+        )
+    if reason == "competitor":
+        return (
+            "I understand. Is the other option mainly better on price, features, "
+            "or are you already set on cancelling?"
+        )
+    return (
+        "I hear you. Could you tell me what's making you consider cancelling so "
+        "I can route you to the right next step?"
+    )
+
+
 def _retain(customer_id: str, customer: dict, offer: dict) -> dict:
-    """Apply an accepted retention offer and end the workflow (step 6)."""
+    """Apply an accepted retention offer and end the workflow."""
     customer = tools.update_account(customer_id, "Active")
     audit = tools.create_audit_log(
         customer_id,
@@ -55,7 +94,7 @@ def _retain(customer_id: str, customer: dict, offer: dict) -> dict:
     return {
         "status": "retained",
         "message": (
-            f"Great news — we've applied the {offer['type']} to your account and your "
+            f"Great news - we've applied the {offer['type']} to your account and your "
             "subscription remains active. Thanks for staying with us!"
         ),
         "offer": offer,
@@ -66,8 +105,14 @@ def _retain(customer_id: str, customer: dict, offer: dict) -> dict:
     }
 
 
-def _cancel(customer_id: str, customer: dict, offer: dict, policy: dict, today: date | None) -> dict:
-    """Calculate the refund, cancel the subscription, and log it (steps 7-10)."""
+def _cancel(
+    customer_id: str,
+    customer: dict,
+    offer: dict,
+    policy: dict,
+    today: date | None,
+) -> dict:
+    """Calculate the refund, cancel the subscription, and log it."""
     refund = tools.calculate_refund(customer, policy, today=today)
     billing_cycle_days = policy.get("refund_policy", {}).get("billing_cycle_days", 30)
 
@@ -84,7 +129,7 @@ def _cancel(customer_id: str, customer: dict, offer: dict, policy: dict, today: 
         "message": (
             f"Your account has been cancelled. Based on your {customer['plan']} plan and a "
             f"{billing_cycle_days}-day billing cycle, your prorated refund for the unused portion "
-            f"of this cycle is ₹{refund:.2f}. This amount will be returned to your original payment method."
+            f"of this cycle is Rs.{refund:.2f}. This amount will be returned to your original payment method."
         ),
         "offer": offer,
         "refund": refund,
@@ -95,7 +140,7 @@ def _cancel(customer_id: str, customer: dict, offer: dict, policy: dict, today: 
 
 
 class CancellationAgent:
-    """Orchestrates the account cancellation & retention workflow."""
+    """Orchestrates the account cancellation and retention workflow."""
 
     def handle_request(
         self,
@@ -104,29 +149,7 @@ class CancellationAgent:
         accept_retention_offer: bool | None = None,
         today: date | None = None,
     ) -> dict:
-        """Run the cancellation workflow for a single customer turn.
-
-        Args:
-            customer_id: the customer's identifier.
-            message: the customer's free-text request (e.g. "I want to cancel my subscription.").
-            accept_retention_offer:
-                - None  -> free-text turn: the customer's `message` is classified
-                           by the LLM to decide whether to present a retention
-                           offer, apply a previously-presented offer, or ask for
-                           clarification. Possible statuses: "off_topic",
-                           "retention_offer_presented", "clarification_needed",
-                           "retained", "cancelled".
-                - True  -> the customer accepted the offer: keep the account
-                           active, log the decision, end the workflow.
-                - False -> the customer declined: calculate the refund, cancel
-                           the subscription, and log the cancellation.
-            today: optional injectable "current date" for deterministic tests.
-
-        Returns:
-            A structured response dict: status, message, offer, refund,
-            audit_log_id, customer_id, customer.
-        """
-        # Step 1: Authenticate customer
+        """Run the cancellation workflow for a single customer turn."""
         try:
             tools.authenticate_user(customer_id)
         except AuthenticationError:
@@ -140,7 +163,6 @@ class CancellationAgent:
                 "customer": None,
             }
 
-        # Step 2: Fetch customer profile (Zoho MCP read)
         try:
             customer = tools.get_customer_data(customer_id)
         except tools.zoho_client.ZohoClientError:
@@ -154,22 +176,78 @@ class CancellationAgent:
                 "customer": None,
             }
 
-        # Step 3: Load cancellation policy (knowledge base — the only source of policy data)
         policy = tools.load_policy()
 
         if accept_retention_offer is None:
             return self._handle_free_text(customer_id, customer, message, policy, today)
 
-        # Step 4 + 5: Determine retention eligibility and build the offer.
-        # Retention MUST always be attempted before a cancellation proceeds.
-        offer = tools.generate_retention_offer(customer, policy, today=today)
+        session = session_store.get_session(customer_id)
+        cancellation_reason = session.get("cancellation_reason") if session else None
+        offer = tools.generate_retention_offer(
+            customer,
+            policy,
+            today=today,
+            cancellation_reason=cancellation_reason,
+        )
 
         if accept_retention_offer:
-            # Step 6: Offer accepted — update the account, end the workflow.
             return _retain(customer_id, customer, offer)
 
-        # Steps 7-10: Offer rejected — calculate the refund, cancel, log, respond.
         return _cancel(customer_id, customer, offer, policy, today)
+
+    def _present_retention_offer(
+        self,
+        customer_id: str,
+        customer: dict,
+        message: str,
+        policy: dict,
+        today: date | None,
+        cancellation_reason: str | None,
+    ) -> dict:
+        """Generate, log, save, and return the retention offer."""
+        offer = tools.generate_retention_offer(
+            customer,
+            policy,
+            today=today,
+            cancellation_reason=cancellation_reason,
+        )
+        audit = tools.create_audit_log(
+            customer_id,
+            action="retention_offer_presented",
+            details={
+                "offer": offer["type"],
+                "message": message,
+                "cancellation_reason": cancellation_reason or "other",
+            },
+        )
+        session_store.save_session(
+            customer_id,
+            {
+                "stage": "awaiting_offer_decision",
+                "offer": offer,
+                "customer": customer,
+                "today": today,
+                "cancellation_reason": cancellation_reason or "other",
+            },
+        )
+        reason_line = (
+            f"Since you mentioned {cancellation_reason.replace('_', ' ')}, "
+            if cancellation_reason and cancellation_reason != "other"
+            else ""
+        )
+        return {
+            "status": "retention_offer_presented",
+            "message": (
+                f"{reason_line}before we proceed, I'd like to offer you: "
+                f"{offer['type']} - {offer['description']} Would you like to "
+                "accept this offer and keep your subscription?"
+            ),
+            "offer": offer,
+            "refund": None,
+            "audit_log_id": audit["audit_log_id"],
+            "customer_id": customer_id,
+            "customer": _customer_summary(customer),
+        }
 
     def _handle_free_text(
         self,
@@ -179,23 +257,40 @@ class CancellationAgent:
         policy: dict,
         today: date | None,
     ) -> dict:
-        """Drive the workflow from a free-text customer message.
-
-        Uses the LLM only to classify the message (cancellation intent, or
-        accept/decline/unclear in reply to a previously-presented offer) — the
-        resulting branch reuses the same deterministic offer/refund/audit logic
-        as the explicit-flag path.
-        """
+        """Drive the workflow from a free-text customer message."""
         session = session_store.get_session(customer_id)
 
         if session is None:
-            if not tools.classify_cancellation_intent(message):
+            cancellation_reason = tools.classify_cancellation_reason(message)
+            is_cancellation_intent = tools.classify_cancellation_intent(message)
+
+            if cancellation_reason and not is_cancellation_intent:
+                session_store.save_session(
+                    customer_id,
+                    {
+                        "stage": "exploring_cancellation_reason",
+                        "cancellation_reason": cancellation_reason,
+                        "customer": customer,
+                        "today": today,
+                    },
+                )
+                return {
+                    "status": "concern_followup",
+                    "message": _reason_followup_message(cancellation_reason),
+                    "offer": None,
+                    "refund": None,
+                    "audit_log_id": None,
+                    "customer_id": customer_id,
+                    "customer": _customer_summary(customer),
+                }
+
+            if not is_cancellation_intent:
                 return {
                     "status": "off_topic",
                     "message": (
-                        "I'm the cancellation & retention assistant, so I can help with "
-                        "cancelling or managing your subscription. Would you like to "
-                        "cancel your subscription?"
+                        "Hi! I'm here to help with your subscription. Tell me what's "
+                        "going on, and if you want to cancel or change your plan I'll "
+                        "walk you through the right next step."
                     ),
                     "offer": None,
                     "refund": None,
@@ -204,30 +299,50 @@ class CancellationAgent:
                     "customer": _customer_summary(customer),
                 }
 
-            # Steps 4 + 5: Determine retention eligibility and build the offer.
-            offer = tools.generate_retention_offer(customer, policy, today=today)
-            audit = tools.create_audit_log(
+            return self._present_retention_offer(
                 customer_id,
-                action="retention_offer_presented",
-                details={"offer": offer["type"], "message": message},
+                customer,
+                message,
+                policy,
+                today,
+                cancellation_reason,
             )
+
+        if session.get("stage") == "exploring_cancellation_reason":
+            cancellation_reason = (
+                tools.classify_cancellation_reason(message)
+                or session.get("cancellation_reason")
+                or "other"
+            )
+            if tools.classify_cancellation_intent(message) or _is_cancellation_confirmation(message):
+                return self._present_retention_offer(
+                    customer_id,
+                    customer,
+                    message,
+                    policy,
+                    today,
+                    cancellation_reason,
+                )
+
             session_store.save_session(
-                customer_id, {"offer": offer, "customer": customer, "today": today}
+                customer_id,
+                {
+                    **session,
+                    "cancellation_reason": cancellation_reason,
+                    "customer": customer,
+                    "today": today,
+                },
             )
             return {
-                "status": "retention_offer_presented",
-                "message": (
-                    f"Before we proceed, we'd like to offer you: {offer['type']} — {offer['description']} "
-                    "Would you like to accept this offer and keep your subscription?"
-                ),
-                "offer": offer,
+                "status": "concern_followup",
+                "message": _reason_followup_message(cancellation_reason),
+                "offer": None,
                 "refund": None,
-                "audit_log_id": audit["audit_log_id"],
+                "audit_log_id": None,
                 "customer_id": customer_id,
                 "customer": _customer_summary(customer),
             }
 
-        # A retention offer is awaiting the customer's decision.
         offer = session["offer"]
         decision = tools.classify_offer_decision(message, offer)
 
@@ -239,11 +354,10 @@ class CancellationAgent:
             session_store.clear_session(customer_id)
             return _cancel(customer_id, customer, offer, policy, today)
 
-        # "unclear" — keep the session and ask the customer to confirm.
         return {
             "status": "clarification_needed",
             "message": (
-                f"Sorry, I didn't quite catch that. We're offering you: {offer['type']} — "
+                f"Sorry, I didn't quite catch that. We're offering you: {offer['type']} - "
                 f"{offer['description']} Would you like to accept this offer and keep your "
                 "subscription, or proceed with cancelling?"
             ),

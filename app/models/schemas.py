@@ -33,8 +33,8 @@ class CustomerSummary(BaseModel):
 
 class CancelAccountResponse(BaseModel):
     #: One of: "invalid_customer", "service_unavailable", "off_topic",
-    #: "retention_offer_presented", "clarification_needed", "retained",
-    #: "cancelled".
+    #: "concern_followup", "retention_offer_presented",
+    #: "clarification_needed", "retained", "cancelled".
     status: str
     message: str
     offer: RetentionOffer | None = None

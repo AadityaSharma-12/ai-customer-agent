@@ -1,8 +1,8 @@
 """Tests for app/services/intent_service.py — the Gemini-based classifiers.
 
 No real API key is used: `genai.Client` is monkeypatched so these tests run
-fully offline. We also verify the safe fallback defaults (`True` /
-"unclear") used when no API key is configured or the call fails.
+fully offline. We also verify the local keyword fallbacks used when no API key
+is configured or the call fails.
 """
 import pytest
 
@@ -15,10 +15,12 @@ def reset_client_cache(monkeypatch):
     monkeypatch.setattr(intent_service, "_client", None)
 
 
-def test_classify_cancellation_intent_without_api_key_defaults_true(monkeypatch):
+def test_classify_cancellation_intent_without_api_key_uses_keyword_fallback(monkeypatch):
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
 
-    assert intent_service.classify_cancellation_intent("what's the weather?") is True
+    assert intent_service.classify_cancellation_intent("hi") is False
+    assert intent_service.classify_cancellation_intent("what's the weather?") is False
+    assert intent_service.classify_cancellation_intent("I want to cancel my plan") is True
 
 
 def test_classify_offer_decision_without_api_key_uses_keyword_fallback(monkeypatch):
@@ -71,7 +73,7 @@ def test_classify_cancellation_intent_false_for_off_topic_message(monkeypatch):
     assert intent_service.classify_cancellation_intent("what's the weather today?") is False
 
 
-def test_classify_cancellation_intent_falls_back_to_true_on_error(monkeypatch):
+def test_classify_cancellation_intent_falls_back_to_keyword_classification_on_error(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
 
     def _boom():
@@ -79,7 +81,38 @@ def test_classify_cancellation_intent_falls_back_to_true_on_error(monkeypatch):
 
     monkeypatch.setattr(intent_service, "_get_client", _boom)
 
+    assert intent_service.classify_cancellation_intent("hi") is False
     assert intent_service.classify_cancellation_intent("cancel my plan") is True
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        ("hi", False),
+        ("hello there", False),
+        ("I need help with billing", False),
+        ("I want to cancel", True),
+        ("please close my account", True),
+        ("can I downgrade my subscription?", True),
+        ("unsubscribe me", True),
+    ],
+)
+def test_keyword_fallback_intent(message, expected):
+    assert intent_service._keyword_fallback_intent(message) is expected
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        ("I'm unhappy with the price", "price"),
+        ("I don't use this anymore", "usage"),
+        ("The product is too slow", "technical_issue"),
+        ("I found a cheaper alternative", "competitor"),
+        ("hello there", None),
+    ],
+)
+def test_classify_cancellation_reason(message, expected):
+    assert intent_service.classify_cancellation_reason(message) == expected
 
 
 def test_classify_offer_decision_parses_accept(monkeypatch):

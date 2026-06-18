@@ -47,9 +47,19 @@ def load_policy() -> dict:
     return load_cancellation_policy()
 
 
-def generate_retention_offer(customer: dict, policy: dict, today: date | None = None) -> dict:
+def generate_retention_offer(
+    customer: dict,
+    policy: dict,
+    today: date | None = None,
+    cancellation_reason: str | None = None,
+) -> dict:
     """Determine and build the retention offer to present to the customer."""
-    return _generate_retention_offer(customer, policy, today=today)
+    return _generate_retention_offer(
+        customer,
+        policy,
+        today=today,
+        cancellation_reason=cancellation_reason,
+    )
 
 
 def calculate_refund(customer: dict, policy: dict, today: date | None = None) -> float:
@@ -74,6 +84,11 @@ def update_account(customer_id: str, status: str) -> dict:
 def classify_cancellation_intent(message: str) -> bool:
     """Determine whether a free-text message is a cancellation request."""
     return intent_service.classify_cancellation_intent(message)
+
+
+def classify_cancellation_reason(message: str) -> str | None:
+    """Detect the customer's reason for considering cancellation."""
+    return intent_service.classify_cancellation_reason(message)
 
 
 def classify_offer_decision(message: str, offer: dict) -> str:

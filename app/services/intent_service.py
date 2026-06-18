@@ -20,6 +20,12 @@ load_dotenv()
 
 _DEFAULT_MODEL = "gemini-flash-latest"
 
+_CANCELLATION_KEYWORDS = (
+    "cancel", "close", "end", "stop", "terminate", "downgrade",
+    "unsubscribe", "delete my account", "close my account", "end my subscription",
+    "stop my subscription", "cancel my subscription", "cancel my plan",
+)
+
 _DECLINE_KEYWORDS = (
     "cancel", "decline", "no", "nope", "not interested", "don't want",
     "remove", "end my", "stop",
@@ -29,6 +35,39 @@ _ACCEPT_KEYWORDS = (
     "sounds good", "that works", "i'll take it",
 )
 
+CancellationReason = Literal["price", "usage", "technical_issue", "competitor", "other"]
+
+_REASON_KEYWORDS: tuple[tuple[CancellationReason, tuple[str, ...]], ...] = (
+    (
+        "competitor",
+        (
+            "competitor", "alternative", "another product", "another service",
+            "switching", "switch", "found a cheaper", "cheaper alternative",
+        ),
+    ),
+    (
+        "price",
+        (
+            "price", "pricing", "expensive", "cost", "costly", "too much",
+            "cheaper", "afford", "budget", "money",
+        ),
+    ),
+    (
+        "usage",
+        (
+            "don't use", "do not use", "not using", "rarely use", "unused",
+            "no longer need", "not needed", "haven't used", "hardly use",
+        ),
+    ),
+    (
+        "technical_issue",
+        (
+            "slow", "bug", "bugs", "broken", "error", "errors", "crash",
+            "crashes", "issue", "issues", "not working", "performance",
+        ),
+    ),
+)
+
 
 class CancellationIntent(BaseModel):
     is_cancellation_request: bool
@@ -36,6 +75,21 @@ class CancellationIntent(BaseModel):
 
 class OfferDecision(BaseModel):
     decision: Literal["accept", "decline", "unclear"]
+
+
+def classify_cancellation_reason(message: str) -> CancellationReason | None:
+    """Detect why a customer may be considering cancellation."""
+    text = message.lower()
+    for reason, keywords in _REASON_KEYWORDS:
+        if any(keyword in text for keyword in keywords):
+            return reason
+    return None
+
+
+def _keyword_fallback_intent(message: str) -> bool:
+    """Local first-turn intent detection for unconfigured/unavailable Gemini."""
+    text = message.lower()
+    return any(re.search(r"\b" + re.escape(word) + r"\b", text) for word in _CANCELLATION_KEYWORDS)
 
 
 def _keyword_fallback_decision(message: str) -> Literal["accept", "decline", "unclear"]:
@@ -80,7 +134,7 @@ def classify_cancellation_intent(message: str) -> bool:
     try:
         client = _get_client()
         if client is None:
-            return True
+            return _keyword_fallback_intent(message)
 
         response = client.models.generate_content(
             model=_model_name(),
@@ -100,7 +154,7 @@ def classify_cancellation_intent(message: str) -> bool:
         )
         return response.parsed.is_cancellation_request
     except Exception:
-        return True
+        return _keyword_fallback_intent(message)
 
 
 def classify_offer_decision(message: str, offer: dict) -> Literal["accept", "decline", "unclear"]:

@@ -24,6 +24,50 @@ def test_new_user_gets_free_month_offer_regardless_of_plan():
     assert offer["type"] == "Free month"
 
 
+def test_usage_reason_gets_pause_plan_offer():
+    customer = {"plan": "Premium", "subscription_start": "2025-01-01"}
+    offer = generate_retention_offer(
+        customer,
+        POLICY,
+        today=date(2026, 1, 1),
+        cancellation_reason="usage",
+    )
+    assert offer["type"] == "Pause plan"
+
+
+def test_technical_reason_gets_support_escalation_offer():
+    customer = {"plan": "Premium", "subscription_start": "2025-01-01"}
+    offer = generate_retention_offer(
+        customer,
+        POLICY,
+        today=date(2026, 1, 1),
+        cancellation_reason="technical_issue",
+    )
+    assert offer["type"] == "Priority support escalation"
+
+
+def test_competitor_reason_gets_competitive_review_offer():
+    customer = {"plan": "Premium", "subscription_start": "2025-01-01"}
+    offer = generate_retention_offer(
+        customer,
+        POLICY,
+        today=date(2026, 1, 1),
+        cancellation_reason="competitor",
+    )
+    assert offer["type"] == "Competitive review"
+
+
+def test_enterprise_plan_keeps_account_review_priority_over_reason():
+    customer = {"plan": "Enterprise", "subscription_start": "2025-01-01"}
+    offer = generate_retention_offer(
+        customer,
+        POLICY,
+        today=date(2026, 1, 1),
+        cancellation_reason="technical_issue",
+    )
+    assert offer["type"] == "Account review"
+
+
 def test_an_offer_is_always_returned():
     # Retention must always be attempted, even for plans with no dedicated rule.
     customer = {"plan": "Free", "subscription_start": "2020-01-01"}
